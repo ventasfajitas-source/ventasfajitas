@@ -72,7 +72,32 @@
 
     <button class="delete-all" onclick="borrarTodo()">⚠️ Borrar historial completo</button>
 
-    <script>
+   <!DOCTYPE html>
+<html lang="es">
+<head>
+    </head>
+<body>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        
+        const firebaseConfig = {
+            apiKey: "TU_API_KEY",
+            authDomain: "TU_PROYECTO.firebaseapp.com",
+            projectId: "TU_PROYECTO_ID",
+            storageBucket: "TU_PROYECTO.appspot.com",
+            messagingSenderId: "TU_ID",
+            appId: "TU_APP_ID"
+        };
+
+       
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const ventasRef = collection(db, "ventas");
+
+        
         const productosConfig = {
             "Fajita": { precio: 2500, icono: "🌯" },
             "Alfajor": { precio: 1000, icono: "🍩" },
@@ -80,144 +105,59 @@
             "Kuchen": { precio: 2500, icono: "🥧" }
         };
 
-        let ventas = JSON.parse(localStorage.getItem('ventas_emprendimiento')) || [];
-
-        function establecerFechaHoy() {
-            const hoy = new Date().toISOString().split('T')[0];
-            document.getElementById('fechaVenta').value = hoy;
-        }
-
-        function agregarVenta() {
-            const fechaInput = document.getElementById('fechaVenta');
-            const clienteInput = document.getElementById('cliente');
+        
+        window.agregarVenta = async () => {
+            const cliente = document.getElementById('cliente').value;
             const productoKey = document.getElementById('producto').value;
-            const cantidadInput = document.getElementById('cantidad');
-            const cantidad = parseInt(cantidadInput.value);
+            const cantidad = parseInt(document.getElementById('cantidad').value);
+            const fechaInput = document.getElementById('fechaVenta').value;
 
-            if (!clienteInput.value.trim()) {
-                alert("Por favor, ingresa el nombre del cliente.");
-                clienteInput.focus();
-                return;
+            if (!cliente.trim()) { alert("Ingresa un cliente"); return; }
+
+            try {
+               
+                await addDoc(ventasRef, {
+                    cliente: cliente,
+                    producto: productoKey,
+                    icono: productosConfig[productoKey].icono,
+                    cantidad: cantidad,
+                    total: productosConfig[productoKey].precio * cantidad,
+                    fecha: fechaInput,
+                    timestamp: Date.now() 
+                document.getElementById('cliente').value = "";
+            } catch (e) {
+                console.error("Error al guardar: ", e);
             }
+        };
 
-            const fechaPartes = fechaInput.value.split('-');
-            const fechaFormateada = `${fechaPartes[2]}/${fechaPartes[1]}/${fechaPartes[0]}`;
-
-            const nuevaVenta = {
-                id: Date.now(),
-                cliente: clienteInput.value.trim(),
-                producto: productoKey,
-                icono: productosConfig[productoKey].icono,
-                cantidad: cantidad,
-                total: productosConfig[productoKey].precio * cantidad,
-                fecha: fechaFormateada
-            };
-
-            ventas.push(nuevaVenta);
-            guardarYRenderizar();
-            
-            // Limpiar campos para la siguiente entrada
-            clienteInput.value = "";
-            cantidadInput.value = "1";
-            clienteInput.focus();
-        }
-
-        function borrarVentaIndividual(id) {
+       
+        window.borrarVentaIndividual = async (id) => {
             if(confirm("¿Eliminar este registro?")) {
-                ventas = ventas.filter(v => v.id !== id);
-                guardarYRenderizar();
+                await deleteDoc(doc(db, "ventas", id));
             }
-        }
+        };
 
-        function borrarTodo() {
-            if(confirm("¿Estás seguro de que quieres borrar TODOS los datos? Esta acción no se puede deshacer.")) {
-                ventas = [];
-                guardarYRenderizar();
-            }
-        }
-
-        function guardarYRenderizar() {
-            localStorage.setItem('ventas_emprendimiento', JSON.stringify(ventas));
-            renderizar();
-        }
-
-        function enviarWhatsApp(cliente) {
-            const comprasCliente = ventas.filter(v => v.cliente === cliente);
-            let totalGeneral = 0;
-            let mensaje = `*RESUMEN DE CUENTA: ${cliente.toUpperCase()}*\n`;
-            
-            const fechasMap = {};
-            comprasCliente.forEach(v => {
-                if (!fechasMap[v.fecha]) fechasMap[v.fecha] = [];
-                fechasMap[v.fecha].push(v);
-                totalGeneral += v.total;
+        const q = query(ventasRef, orderBy("timestamp", "desc"));
+        onSnapshot(q, (snapshot) => {
+            const ventasNube = [];
+            snapshot.forEach((doc) => {
+                ventasNube.push({ id: doc.id, ...doc.data() });
             });
+            renderizar(ventasNube); 
+        });
 
-            for (const fecha in fechasMap) {
-                mensaje += `\n📅 *${fecha}*\n`;
-                fechasMap[fecha].forEach(v => {
-                    mensaje += `  • ${v.cantidad}x ${v.icono} ${v.producto} ($${v.total.toLocaleString('es-CL')})\n`;
-                });
-            }
-
-            mensaje += `\n*TOTAL A PAGAR: $${totalGeneral.toLocaleString('es-CL')}*`;
-            window.open("https://wa.me/?text=" + encodeURIComponent(mensaje), '_blank');
-        }
-
-        function renderizar() {
+      
+        function renderizar(ventasData) {
             const contenedor = document.getElementById('listado');
             contenedor.innerHTML = "";
-
-            if (ventas.length === 0) {
-                contenedor.innerHTML = "<p style='text-align:center; color: gray; margin-top: 30px;'>No hay ventas registradas aún.</p>";
+            
+            if (ventasData.length === 0) {
+                contenedor.innerHTML = "<p style='text-align:center;'>Sin ventas.</p>";
                 return;
             }
 
-            // Obtener clientes únicos y ordenarlos alfabéticamente
-            const clientesUnicos = [...new Set(ventas.map(v => v.cliente))].sort();
-
-            clientesUnicos.forEach(cliente => {
-                const div = document.createElement('div');
-                div.className = 'card';
-                let totalC = 0;
-                let tablaHTML = `<h3>👤 ${cliente}</h3><table>`;
-                
-                const ventasCliente = ventas.filter(v => v.cliente === cliente);
-                const fechasMap = {};
-                ventasCliente.forEach(v => {
-                    if (!fechasMap[v.fecha]) fechasMap[v.fecha] = [];
-                    fechasMap[v.fecha].push(v);
-                    totalC += v.total;
-                });
-
-                for (const fecha in fechasMap) {
-                    tablaHTML += `<tr class="fecha-grupo"><td colspan="3">📅 ${fecha}</td></tr>`;
-                    fechasMap[fecha].forEach(v => {
-                        tablaHTML += `
-                            <tr>
-                                <td>${v.icono} ${v.cantidad} ${v.producto}</td>
-                                <td class="total-monto" style="text-align: right;">$${v.total.toLocaleString('es-CL')}</td>
-                                <td class="col-accion">
-                                    <button class="btn-borrar-uno" onclick="borrarVentaIndividual(${v.id})">✕</button>
-                                </td>
-                            </tr>`;
-                    });
-                }
-
-                tablaHTML += `
-                    <tr class="total-fila">
-                        <td>TOTAL</td>
-                        <td style="text-align: right;">$${totalC.toLocaleString('es-CL')}</td>
-                        <td></td>
-                    </tr></table>`;
-                
-                div.innerHTML = tablaHTML + `<button class="btn-whatsapp" onclick="enviarWhatsApp('${cliente}')">📲 Enviar por WhatsApp</button>`;
-                contenedor.appendChild(div);
-            });
+      
         }
-
-        establecerFechaHoy();
-        renderizar();
     </script>
 </body>
 </html>
