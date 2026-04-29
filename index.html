@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro de Ventas - Emprendimiento</title>
+    <style>
+        :root {
+            --primary-color: #25d366;
+            --danger-color: #ff4d4d;
+            --bg-color: #f4f4f9;
+        }
+
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; background: var(--bg-color); color: #333; max-width: 600px; margin: auto; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; border: 1px solid #eee; }
+        
+        input, select, button { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; outline: none; }
+        input:focus, select:focus { border-color: var(--primary-color); box-shadow: 0 0 0 2px rgba(37, 211, 102, 0.2); }
+        
+        label { font-size: 14px; font-weight: bold; display: block; margin-top: 10px; color: #666; }
+        
+        button { background: var(--primary-color); color: white; border: none; cursor: pointer; font-weight: bold; transition: background 0.3s ease; }
+        button:hover { background: #1ebe57; }
+        button:active { transform: scale(0.98); }
+
+        .btn-whatsapp { background: #128C7E; margin-top: 15px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        
+        button.delete-all { background: transparent; color: #999; margin-top: 40px; font-size: 13px; border: 1px dashed #ccc; }
+        button.delete-all:hover { background: #fff1f1; color: var(--danger-color); border-color: var(--danger-color); }
+
+        .btn-borrar-uno { background: #fee; width: 32px; height: 32px; padding: 0; border-radius: 8px; color: var(--danger-color); font-size: 14px; border: 1px solid #fcc; }
+        .btn-borrar-uno:hover { background: var(--danger-color); color: white; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; background: #fff; }
+        th, td { padding: 12px 8px; text-align: left; border-bottom: 1px solid #eee; }
+        
+        h2 { text-align: center; color: #222; margin-bottom: 25px; }
+        h3 { margin-top: 0; color: #128C7E; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+
+        .fecha-grupo { background: #fafafa; font-weight: bold; color: #777; font-size: 12px; }
+        .total-fila { background: #f9f9f9; font-weight: bold; color: #000; font-size: 15px; }
+        .col-accion { text-align: center; width: 45px; }
+        .total-monto { color: #2c3e50; font-weight: 800; }
+    </style>
+</head>
+<body>
+
+    <h2>🚀 Registro de Ventas</h2>
+    
+    <div class="card">
+        <label for="fechaVenta">Fecha de Venta:</label>
+        <input type="date" id="fechaVenta">
+
+        <label for="cliente">Nombre del Cliente:</label>
+        <input type="text" id="cliente" placeholder="Ej: Juan Pérez" autocomplete="off">
+        
+        <label for="producto">Producto:</label>
+        <select id="producto">
+            <option value="Fajita">🌯 Fajita ($2.500)</option>
+            <option value="Alfajor">🍩 Alfajor ($1.000)</option>
+            <option value="Torta">🍰 Torta ($2.500)</option>
+            <option value="Kuchen">🥧 Kuchen ($2.500)</option>
+        </select>
+        
+        <label for="cantidad">Cantidad:</label>
+        <input type="number" id="cantidad" value="1" min="1">
+        
+        <button onclick="agregarVenta()">➕ Registrar Venta</button>
+    </div>
+
+    <div id="listado"></div>
+
+    <button class="delete-all" onclick="borrarTodo()">⚠️ Borrar historial completo</button>
+
+    <script>
+        const productosConfig = {
+            "Fajita": { precio: 2500, icono: "🌯" },
+            "Alfajor": { precio: 1000, icono: "🍩" },
+            "Torta": { precio: 2500, icono: "🍰" },
+            "Kuchen": { precio: 2500, icono: "🥧" }
+        };
+
+        let ventas = JSON.parse(localStorage.getItem('ventas_emprendimiento')) || [];
+
+        function establecerFechaHoy() {
+            const hoy = new Date().toISOString().split('T')[0];
+            document.getElementById('fechaVenta').value = hoy;
+        }
+
+        function agregarVenta() {
+            const fechaInput = document.getElementById('fechaVenta');
+            const clienteInput = document.getElementById('cliente');
+            const productoKey = document.getElementById('producto').value;
+            const cantidadInput = document.getElementById('cantidad');
+            const cantidad = parseInt(cantidadInput.value);
+
+            if (!clienteInput.value.trim()) {
+                alert("Por favor, ingresa el nombre del cliente.");
+                clienteInput.focus();
+                return;
+            }
+
+            const fechaPartes = fechaInput.value.split('-');
+            const fechaFormateada = `${fechaPartes[2]}/${fechaPartes[1]}/${fechaPartes[0]}`;
+
+            const nuevaVenta = {
+                id: Date.now(),
+                cliente: clienteInput.value.trim(),
+                producto: productoKey,
+                icono: productosConfig[productoKey].icono,
+                cantidad: cantidad,
+                total: productosConfig[productoKey].precio * cantidad,
+                fecha: fechaFormateada
+            };
+
+            ventas.push(nuevaVenta);
+            guardarYRenderizar();
+            
+            // Limpiar campos para la siguiente entrada
+            clienteInput.value = "";
+            cantidadInput.value = "1";
+            clienteInput.focus();
+        }
+
+        function borrarVentaIndividual(id) {
+            if(confirm("¿Eliminar este registro?")) {
+                ventas = ventas.filter(v => v.id !== id);
+                guardarYRenderizar();
+            }
+        }
+
+        function borrarTodo() {
+            if(confirm("¿Estás seguro de que quieres borrar TODOS los datos? Esta acción no se puede deshacer.")) {
+                ventas = [];
+                guardarYRenderizar();
+            }
+        }
+
+        function guardarYRenderizar() {
+            localStorage.setItem('ventas_emprendimiento', JSON.stringify(ventas));
+            renderizar();
+        }
+
+        function enviarWhatsApp(cliente) {
+            const comprasCliente = ventas.filter(v => v.cliente === cliente);
+            let totalGeneral = 0;
+            let mensaje = `*RESUMEN DE CUENTA: ${cliente.toUpperCase()}*\n`;
+            
+            const fechasMap = {};
+            comprasCliente.forEach(v => {
+                if (!fechasMap[v.fecha]) fechasMap[v.fecha] = [];
+                fechasMap[v.fecha].push(v);
+                totalGeneral += v.total;
+            });
+
+            for (const fecha in fechasMap) {
+                mensaje += `\n📅 *${fecha}*\n`;
+                fechasMap[fecha].forEach(v => {
+                    mensaje += `  • ${v.cantidad}x ${v.icono} ${v.producto} ($${v.total.toLocaleString('es-CL')})\n`;
+                });
+            }
+
+            mensaje += `\n*TOTAL A PAGAR: $${totalGeneral.toLocaleString('es-CL')}*`;
+            window.open("https://wa.me/?text=" + encodeURIComponent(mensaje), '_blank');
+        }
+
+        function renderizar() {
+            const contenedor = document.getElementById('listado');
+            contenedor.innerHTML = "";
+
+            if (ventas.length === 0) {
+                contenedor.innerHTML = "<p style='text-align:center; color: gray; margin-top: 30px;'>No hay ventas registradas aún.</p>";
+                return;
+            }
+
+            // Obtener clientes únicos y ordenarlos alfabéticamente
+            const clientesUnicos = [...new Set(ventas.map(v => v.cliente))].sort();
+
+            clientesUnicos.forEach(cliente => {
+                const div = document.createElement('div');
+                div.className = 'card';
+                let totalC = 0;
+                let tablaHTML = `<h3>👤 ${cliente}</h3><table>`;
+                
+                const ventasCliente = ventas.filter(v => v.cliente === cliente);
+                const fechasMap = {};
+                ventasCliente.forEach(v => {
+                    if (!fechasMap[v.fecha]) fechasMap[v.fecha] = [];
+                    fechasMap[v.fecha].push(v);
+                    totalC += v.total;
+                });
+
+                for (const fecha in fechasMap) {
+                    tablaHTML += `<tr class="fecha-grupo"><td colspan="3">📅 ${fecha}</td></tr>`;
+                    fechasMap[fecha].forEach(v => {
+                        tablaHTML += `
+                            <tr>
+                                <td>${v.icono} ${v.cantidad} ${v.producto}</td>
+                                <td class="total-monto" style="text-align: right;">$${v.total.toLocaleString('es-CL')}</td>
+                                <td class="col-accion">
+                                    <button class="btn-borrar-uno" onclick="borrarVentaIndividual(${v.id})">✕</button>
+                                </td>
+                            </tr>`;
+                    });
+                }
+
+                tablaHTML += `
+                    <tr class="total-fila">
+                        <td>TOTAL</td>
+                        <td style="text-align: right;">$${totalC.toLocaleString('es-CL')}</td>
+                        <td></td>
+                    </tr></table>`;
+                
+                div.innerHTML = tablaHTML + `<button class="btn-whatsapp" onclick="enviarWhatsApp('${cliente}')">📲 Enviar por WhatsApp</button>`;
+                contenedor.appendChild(div);
+            });
+        }
+
+        establecerFechaHoy();
+        renderizar();
+    </script>
+</body>
+</html>
